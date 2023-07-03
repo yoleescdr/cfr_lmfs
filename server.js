@@ -14,25 +14,40 @@ app.get('/', (req, res) => {
 });
 
 app.post('/upload', upload.single('file'), (req, res) => {
-  const results = [];
-  const vehicles = {};
+  let results = [];
+  let vehicles = {};
+  let vehicleProcessed = false;
+  let count = 0;
 
   fs.createReadStream(req.file.path)
     .pipe(csv())
     .on('data', (data) => {
+      count++;
+      
+      // Ignore rows with blank visit location
+      if (!data['Visit location (lat, lng)']) {
+        return;
+      }
+      
+      // Start processing from the third row
+      if (count < 3) {
+        return;
+      }
+      
       const vehicle = data['Vehicle index'];
       const task = data['Shipment index'];
       const start = moment(data['Visit start']);
       const end = moment(data['Visit end']);
       const next = moment(data['Time to next stop'], 'HH:mm:ss');
       const latLng = data['Visit location (lat, lng)'].split(', ').map(Number);
-
-      if (!vehicles[vehicle]) {
+      
+      // Process only the first vehicle
+      if (!vehicleProcessed) {
         vehicles[vehicle] = {
           vehicle: {
             vehicle_id: vehicle,
             start_location: {
-              lat: latLng[0],
+              lat: latLng[0], // Pickup location as the start location
               lng: latLng[1],
               description: data['Vehicle label'],
             },
@@ -40,6 +55,9 @@ app.post('/upload', upload.single('file'), (req, res) => {
           tasks: [],
           stops: [],
         };
+        vehicleProcessed = true;
+      } else if (vehicle !== Object.keys(vehicles)[0]) {
+        return;
       }
 
       vehicles[vehicle].tasks.push({
@@ -78,6 +96,7 @@ app.post('/upload', upload.single('file'), (req, res) => {
       res.send({ file: filename });
     });
 });
+
 
 app.use('/downloads', express.static(path.join(__dirname, 'public')));
 
