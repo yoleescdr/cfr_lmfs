@@ -18,6 +18,7 @@ app.post('/upload', upload.single('file'), (req, res) => {
   let vehicles = {};
   let vehicleProcessed = false;
   let count = 0;
+  let taskId = 1;  // New variable for unique task ID
 
   fs.createReadStream(req.file.path)
     .pipe(csv())
@@ -35,7 +36,8 @@ app.post('/upload', upload.single('file'), (req, res) => {
       }
       
       const vehicle = data['Vehicle index'];
-      const task = data['Shipment index'];
+      const task = "task_" + taskId; // Unique task ID
+      taskId++; // Increment for next task
       const start = moment(data['Visit start']);
       const end = moment(data['Visit end']);
       const next = moment(data['Time to next stop'], 'HH:mm:ss');
@@ -61,7 +63,7 @@ app.post('/upload', upload.single('file'), (req, res) => {
       }
 
       vehicles[vehicle].tasks.push({
-        task_id: task,
+        task_id: task, // use the new task ID
         tracking_id: data['Shipment label'],
         planned_waypoint: {
           lat: latLng[0],
@@ -96,6 +98,7 @@ app.post('/upload', upload.single('file'), (req, res) => {
       res.send({ file: filename });
     });
 });
+
 
 
 app.use('/downloads', express.static(path.join(__dirname, 'public')));
