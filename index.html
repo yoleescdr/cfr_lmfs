@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+<body>
+
+<h2>CSV to JSON Converter</h2>
+
+<form id="upload-form" action="/upload" method="post" enctype="multipart/form-data">
+  <input type="file" id="file" name="file" accept=".csv">
+  <input type="submit">
+</form>
+
+<button id="download-button" style="display: none;">Download JSON</button>
+
+<script>
+document.getElementById('upload-form').addEventListener('submit', function(e) {
+  e.preventDefault();
+
+  const file = document.getElementById('file').files[0];
+  if (!file) {
+    return;
+  }
+
+  const formData = new FormData();
+  formData.append('file', file);
+
+  fetch('/upload', {
+    method: 'POST',
+    body: formData,
+  })
+  .then(response => response.json())
+  .then(data => {
+    const downloadButton = document.getElementById('download-button');
+    downloadButton.style.display = 'block';
+    downloadButton.onclick = function() {
+      window.location.href = '/downloads/' + data.file;
+    };
+  });
+});
+</script>
+
+</body>
+</html>
