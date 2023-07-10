@@ -17,7 +17,6 @@ app.post('/upload', upload.single('file'), (req, res) => {
   let results = [];
   let vehicles = {};
   let vehicleProcessed = false;
-  let count = 0;
   let taskId = 1;  // Variable for task ID
   let stopId = 1;  // Variable for stop ID
   let tasks = [];  // Array to store all tasks for the single stop
@@ -25,33 +24,26 @@ app.post('/upload', upload.single('file'), (req, res) => {
   fs.createReadStream(req.file.path)
     .pipe(csv())
     .on('data', (data) => {
-      count++;
-      
-      // Ignore rows with blank visit location
-      if (!data['Visit location (lat, lng)']) {
+
+      // Process only rows with 'Visit type' as 'Pickup' or 'Delivery'
+      if (data['Visit type'] !== 'Pickup' && data['Visit type'] !== 'Delivery') {
         return;
       }
-      
-      // Start processing from the third row
-      if (count < 3) {
-        return;
-      }
-      
-      const vehicle = data['Vehicle index'];
+
+      const vehicle = data['Vehicle label']; // Changed vehicle_id to correspond to 'Vehicle label' column
       const task = "task_" + taskId; // Task ID
       taskId++; // Increment for next task
       const start = moment(data['Visit start']);
       const end = moment(data['Visit end']);
       const next = moment(data['Time to next stop'], 'HH:mm:ss');
       const latLng = data['Visit location (lat, lng)'].split(', ').map(Number);
-      
-      // Process only the first vehicle
-      if (!vehicleProcessed) {
+
+      if (!vehicles[vehicle]) { // Check if vehicle is already processed
         vehicles[vehicle] = {
           vehicle: {
             vehicle_id: vehicle,
             start_location: {
-              lat: latLng[0], // Pickup location as the start location
+              lat: latLng[0],
               lng: latLng[1],
               description: data['Vehicle label'],
             },
@@ -59,13 +51,10 @@ app.post('/upload', upload.single('file'), (req, res) => {
           tasks: [],
           stops: [],
         };
-        vehicleProcessed = true;
-      } else if (vehicle !== Object.keys(vehicles)[0]) {
-        return;
       }
 
       vehicles[vehicle].tasks.push({
-        task_id: task, // use the new task ID
+        task_id: task, 
         tracking_id: data['Shipment label'],
         planned_waypoint: {
           lat: latLng[0],
@@ -78,22 +67,23 @@ app.post('/upload', upload.single('file'), (req, res) => {
         planned_completion_time_range_seconds: next.diff(end, 'seconds'),
         contact_name: data['Vehicle label'],
       });
-      
-      // Store all tasks for the single stop
+
       tasks.push(task);
     })
     .on('end', () => {
-      const stop = "stop_" + stopId; // Unique stop ID
-      vehicles[Object.keys(vehicles)[0]].stops.push({
-        stop_id: stop, // use the new stop ID
-        planned_waypoint: {
-          lat: vehicles[Object.keys(vehicles)[0]].vehicle.start_location.lat,
-          lng: vehicles[Object.keys(vehicles)[0]].vehicle.start_location.lng,
-          description: vehicles[Object.keys(vehicles)[0]].vehicle.start_location.description,
-        },
-        tasks: tasks, // Add all tasks to the single stop
+      Object.keys(vehicles).forEach(vehicleKey => {
+        const stop = "stop_" + stopId;
+        vehicles[vehicleKey].stops.push({
+          stop_id: stop,
+          planned_waypoint: {
+            lat: vehicles[vehicleKey].vehicle.start_location.lat,
+            lng: vehicles[vehicleKey].vehicle.start_location.lng,
+            description: vehicles[vehicleKey].vehicle.start_location.description,
+          },
+          tasks: tasks,
+        });
       });
-      
+
       const output = {
         manifests: Object.values(vehicles),
         description: '',
@@ -104,8 +94,6 @@ app.post('/upload', upload.single('file'), (req, res) => {
       res.send({ file: filename });
     });
 });
-
-
 
 app.use('/downloads', express.static(path.join(__dirname, 'public')));
 
