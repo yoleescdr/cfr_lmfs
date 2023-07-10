@@ -18,7 +18,9 @@ app.post('/upload', upload.single('file'), (req, res) => {
   let vehicles = {};
   let vehicleProcessed = false;
   let count = 0;
-  let taskId = 1;  // New variable for unique task ID
+  let taskId = 1;  // Variable for task ID
+  let stopId = 1;  // Variable for stop ID
+  let tasks = [];  // Array to store all tasks for the single stop
 
   fs.createReadStream(req.file.path)
     .pipe(csv())
@@ -36,7 +38,7 @@ app.post('/upload', upload.single('file'), (req, res) => {
       }
       
       const vehicle = data['Vehicle index'];
-      const task = "task_" + taskId; // Unique task ID
+      const task = "task_" + taskId; // Task ID
       taskId++; // Increment for next task
       const start = moment(data['Visit start']);
       const end = moment(data['Visit end']);
@@ -76,18 +78,22 @@ app.post('/upload', upload.single('file'), (req, res) => {
         planned_completion_time_range_seconds: next.diff(end, 'seconds'),
         contact_name: data['Vehicle label'],
       });
-
-      vehicles[vehicle].stops.push({
-        stop_id: data['Visit label'],
-        planned_waypoint: {
-          lat: latLng[0],
-          lng: latLng[1],
-          description: data['Vehicle label'],
-        },
-        tasks: [task],
-      });
+      
+      // Store all tasks for the single stop
+      tasks.push(task);
     })
     .on('end', () => {
+      const stop = "stop_" + stopId; // Unique stop ID
+      vehicles[Object.keys(vehicles)[0]].stops.push({
+        stop_id: stop, // use the new stop ID
+        planned_waypoint: {
+          lat: vehicles[Object.keys(vehicles)[0]].vehicle.start_location.lat,
+          lng: vehicles[Object.keys(vehicles)[0]].vehicle.start_location.lng,
+          description: vehicles[Object.keys(vehicles)[0]].vehicle.start_location.description,
+        },
+        tasks: tasks, // Add all tasks to the single stop
+      });
+      
       const output = {
         manifests: Object.values(vehicles),
         description: '',
